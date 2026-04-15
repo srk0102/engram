@@ -1,0 +1,20 @@
+{
+  "name": "@engram/core",
+  "version": "0.1.0",
+  "description":
+    "Your API learns to defend itself.",
+  "keywords": [
+    "behavioral-caching",
+    "bot-detection",
+    "pattern-memory",
+    "self-learning",
+    "supabase",
+    "api-protection",
+    "engram"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srk0102/engram"
+  }
+}
