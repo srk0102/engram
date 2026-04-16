@@ -1,0 +1,6 @@
+default_version = '1.0.2'
+comment = 'Your API learns to defend itself. Behavior gate for Supabase APIs.'
+relocatable = false
+requires = 'pg_tle, pg_cron'
+superuser = false
+schema = 'engram'
