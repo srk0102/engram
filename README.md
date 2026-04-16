@@ -21,9 +21,9 @@
 
 You built an API. Users pay for it. Bots don't.
 
-A bot scraping your parsed resumes costs you the same LLM call as a real user. A fraudster with a stolen card burns through your credits in minutes. A churning user silently walks away with unused credits.
+A bot scraping your data costs you the same compute as a real user. A fraudster with a stolen card burns through your paid features in minutes. A churning user silently walks away with unused credits.
 
-Rate limiters don't help. They count requests, not behavior. A smart bot sends 29 requests per minute and passes your 30/min limit. A real user uploading 5 resumes during a job search gets blocked.
+Rate limiters don't help. They count requests, not behavior. A smart bot sends 29 requests per minute and passes your 30/min limit. A real user doing 5 actions in quick succession gets blocked.
 
 ## The solution
 
@@ -31,7 +31,7 @@ Engram watches **behavior**, not requests.
 
 A real user has an account age, a payment history, a browsing pattern. A bot has a 0-day account doing 15 uploads per hour with no user agent.
 
-Engram classifies the behavior shape. Stores the decision. Next request with the same shape — decision served from cache. No classification needed.
+Engram classifies the behavior shape. Stores the decision. Next request with the same shape - decision served from cache. No classification needed.
 
 **One brain call teaches. The pattern store remembers.**
 
@@ -42,14 +42,14 @@ Engram classifies the behavior shape. Stores the decision. Next request with the
 
 ## What happens to different users
 
-| User | Engram sees | Decision | Your LLM called? |
+| User | Engram sees | Decision | Reaches your API? |
 |------|-------------|----------|-------------------|
-| Real user, 30 days old, 2 uploads today | Normal behavior | **allow** | Yes |
-| Bot, 0 days old, 15 uploads this hour | Burst velocity + no UA | **fraud** (403) | No |
-| Scraper, fake Chrome UA, 8 uploads/hr | Young account + high velocity | **fraud** (403) | No |
+| Real user, 30 days old, 2 actions today | Normal behavior | **allow** | Yes |
+| Bot, 0 days old, 15 requests this hour | Burst velocity + no UA | **fraud** (403) | No |
+| Scraper, fake Chrome UA, 8 requests/hr | Young account + high velocity | **fraud** (403) | No |
 | Paid user, inactive 20 days, has credits | Idle with unspent credits | **churn_risk** | Yes (+ team notified) |
 
-Bots never reach your database. Fraudsters never call your LLM. Real users never notice Engram exists.
+Bots never reach your database. Fraudsters never hit your backend. Real users never notice Engram exists.
 
 ## Install (3 steps)
 
@@ -92,7 +92,7 @@ import { withEngram } from './lib/engram'
 export const POST = withEngram(async (request) => {
   // Bots and fraudsters never reach this line.
   // Engram already returned 403/429 for them.
-  const data = await callYourExpensiveLLM()
+  const data = await handleRequest(request)
   return Response.json(data)
 })
 ```
@@ -119,9 +119,9 @@ Covers: all 18 functions, schema reference, classification rules, Node.js integr
 
 ## Links
 
-- **[SCP Protocol](https://github.com/srk0102/SCP)** — body-level pattern caching
-- **[Plexa](https://github.com/srk0102/plexa)** — multi-body orchestration
-- **[Supabase](https://supabase.com)** — the database Engram runs on
+- **[SCP Protocol](https://github.com/srk0102/SCP)** - body-level pattern caching
+- **[Plexa](https://github.com/srk0102/plexa)** - multi-body orchestration
+- **[Supabase](https://supabase.com)** - the database Engram runs on
 
 ## License
 

@@ -1,4 +1,4 @@
-# Engram — Documentation
+# Engram - Documentation
 
 Complete technical reference for installing, configuring, and using Engram.
 
@@ -61,7 +61,7 @@ Engram works out of the box with zero configuration. The default rules cover:
 - Churn risk (paid users going idle)
 - Young account velocity flagging
 
-To customize rules, edit the `engram.classify()` function directly in your SQL Editor. Rules are plain `IF/THEN` statements in PL/pgSQL — no config files, no YAML, no environment variables.
+To customize rules, edit the `engram.classify()` function directly in your SQL Editor. Rules are plain `IF/THEN` statements in PL/pgSQL - no config files, no YAML, no environment variables.
 
 ---
 
@@ -73,17 +73,17 @@ Every request that passes through Engram gets one of five decisions:
 Normal user. Request passes silently. No logging beyond a rollup counter. This is what 95%+ of your traffic should see.
 
 ### flag
-Suspicious but not certain. Request passes through — the user gets their response normally. But the request is tagged internally so you can review it later via `engram.list_visits(null, 'flag')`.
+Suspicious but not certain. Request passes through - the user gets their response normally. But the request is tagged internally so you can review it later via `engram.list_visits(null, 'flag')`.
 
 Use case: young accounts with moderate activity. You don't want to block them (they might be real), but you want to watch.
 
 ### fraud
-Blocked. Returns 403 before your handler runs. Your LLM is never called. Your database is never queried. Credits are not deducted. Cost for this request: $0.
+Blocked. Returns 403 before your handler runs. Your database is never queried. Your backend logic never executes. Cost for this request: $0.
 
-Use case: brand-new account uploading 15 resumes in one hour with no user agent.
+Use case: brand-new account making 15 requests in one hour with no user agent.
 
 ### bot
-Blocked. Returns 429 with a Retry-After header. Same as fraud in terms of blocking, but semantically different — this is automated traffic, not necessarily malicious.
+Blocked. Returns 429 with a Retry-After header. Same as fraud in terms of blocking, but semantically different - this is automated traffic, not necessarily malicious.
 
 Use case: someone running a script against your API without authentication.
 
@@ -100,19 +100,19 @@ Rules are evaluated top to bottom. First match wins.
 
 ```
 1. fraud_new_burst
-   Account < 1 day old AND 10+ uploads per hour
+   Account < 1 day old AND 10+ requests per hour
    → fraud (0.95 confidence)
 
 2. fraud_new_paid_fast
-   Account < 1 day old AND has paid AND 5+ uploads per hour
+   Account < 1 day old AND has paid AND 5+ requests per hour
    → fraud (0.90 confidence)
 
 3. bot_ua_velocity
-   User agent is missing or suspicious AND 5+ uploads per hour
+   User agent is missing or suspicious AND 5+ requests per hour
    → bot (0.92 confidence)
 
 4. bot_anon_velocity
-   Not authenticated AND 3+ uploads per hour
+   Not authenticated AND 3+ requests per hour
    → bot (0.85 confidence)
 
 5. churn_idle_with_credits
@@ -124,15 +124,15 @@ Rules are evaluated top to bottom. First match wins.
    → churn_risk (0.75 confidence)
 
 7. young_account_bot_velocity
-   Account 1-3 days old AND 8+ uploads per hour
+   Account 1-3 days old AND 8+ requests per hour
    → fraud (0.88 confidence, escalated)
 
 8. flag_young_velocity
-   Account 1-3 days old AND 4-7 uploads per hour
+   Account 1-3 days old AND 4-7 requests per hour
    → flag (0.75 confidence)
 
 9. velocity_absolute
-   15+ uploads per hour regardless of account age
+   15+ requests per hour regardless of account age
    → flag (0.82 confidence)
 
 10. allow_default
@@ -210,11 +210,11 @@ Mark a visit as completed with the HTTP status code.
 
 ### `engram.enqueue_churn(user_id, signals) → void`
 
-Add or update a user in the churn queue. Upserts — same user flagged twice just increments the counter.
+Add or update a user in the churn queue. Upserts - same user flagged twice just increments the counter.
 
 ### `engram.user_signals(user_id) → jsonb`
 
-Assembles all behavior context for a user in one query. Returns account age, credits, upload counts, payment status, visit count. Use this to build the features object for `classify()` or `decide()`.
+Assembles all behavior context for a user in one query. Returns account age, credits, request counts, payment status, visit count. Use this to build the features object for `classify()` or `decide()`.
 
 ---
 
@@ -241,7 +241,7 @@ select engram.dashboard();
   "route_visits": {
     "total": 7,
     "by_decision": {"allow": 6, "fraud": 1},
-    "by_endpoint": {"/api/parse-resume": 7}
+    "by_endpoint": {"/api/data": 7}
   },
   "churn_queue_unresolved": 0,
   "version": "v1.0.2"
@@ -273,12 +273,12 @@ Route visit history. Filter by endpoint, decision, or both.
 select engram.list_visits(null, 'fraud', 20);
 
 -- All visits to a specific endpoint
-select engram.list_visits('/api/parse-resume', null, 50);
+select engram.list_visits('/api/data', null, 50);
 ```
 
 ### `engram.list_audit(namespace, limit) → jsonb`
 
-Audit log — every learn, feedback, and eviction event.
+Audit log - every learn, feedback, and eviction event.
 
 ### `engram.list_churn_queue(include_resolved) → jsonb`
 
@@ -320,7 +320,7 @@ export const POST = withEngram(async (request) => {
 
 ### Fail-open guarantee
 
-If Supabase is down, if the RPC times out, if any error occurs inside Engram — your handler runs anyway. Engram will never block a legitimate user because it crashed. This is enforced by a `try/catch` around the entire gate logic.
+If Supabase is down, if the RPC times out, if any error occurs inside Engram - your handler runs anyway. Engram will never block a legitimate user because it crashed. This is enforced by a `try/catch` around the entire gate logic.
 
 ### Custom action handlers
 
@@ -367,7 +367,7 @@ export const POST = withEngram(handler, {
 |--------|------|-------------|
 | id | bigserial PK | Auto-increment |
 | user_id | uuid | Nullable (anonymous requests have null) |
-| endpoint | text | Route path (e.g. '/api/parse-resume') |
+| endpoint | text | Route path (e.g. '/api/data') |
 | ip | text | Client IP from X-Forwarded-For or similar |
 | ua | text | Raw User-Agent header |
 | decision | text | What Engram decided for this request |
@@ -416,7 +416,7 @@ service_role      USAGE            SELECT (+some)    EXECUTE on all
 - **anon** cannot see or call anything in the engram schema
 - **authenticated** can call functions but cannot `SELECT * FROM engram.patterns`
 - **service_role** (your backend) can read tables directly for dashboards
-- All tables have **RLS enabled** with no policies — locked by default
+- All tables have **RLS enabled** with no policies - locked by default
 - Functions that cross schemas use **SECURITY DEFINER** with explicit `search_path`
 
 ---
@@ -469,10 +469,10 @@ These are the fields `engram.classify()` reads from the input JSON:
 |-------|------|---------------|
 | `authenticated` | boolean | Is the user logged in? |
 | `account_age_days` | int | Days since account creation |
-| `uploads_last_hour` | int | Uploads/generations in last 60 minutes |
-| `uploads_last_7d` | int | Uploads/generations in last 7 days |
+| `uploads_last_hour` | int | Requests in last 60 minutes |
+| `uploads_last_7d` | int | Requests in last 7 days |
 | `credits_remaining` | int | Unused credits on the account |
-| `last_activity_days` | int | Days since last upload/generation |
+| `last_activity_days` | int | Days since last activity |
 | `last_payment_status` | text | 'success', 'error', 'expired', or 'none' |
 | `visits_last_hour` | int | Route visits logged by Engram in last hour |
 | `ua_class` | text | 'browser', 'suspicious', or 'missing' |
