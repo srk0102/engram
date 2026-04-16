@@ -411,6 +411,137 @@ begin
   get diagnostics n=row_count; return n;
 end; $$;
 
+-- ============================================================
+-- Read APIs — query everything Engram has learned
+-- ============================================================
+
+create or replace function engram.list_patterns(
+  p_ns text default null, p_limit int default 100
+) returns jsonb language plpgsql security definer set search_path = engram, pg_temp as $$
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', p.id, 'namespace', p.namespace, 'decision', p.decision,
+      'confidence', p.confidence, 'hit_count', p.hit_count,
+      'success_count', p.success_count, 'failure_count', p.failure_count,
+      'rule', p.reason->>'rule', 'explanation', p.reason->>'explanation',
+      'signals', p.reason->'signals',
+      'created_at', to_timestamp(p.created_at / 1000)::text,
+      'updated_at', to_timestamp(p.updated_at / 1000)::text
+    ) order by p.hit_count desc)
+    from engram.patterns p
+    where (p_ns is null or p.namespace = p_ns)
+    limit p_limit
+  ), '[]'::jsonb);
+end; $$;
+
+create or replace function engram.get_pattern(p_id text)
+returns jsonb language plpgsql security definer set search_path = engram, pg_temp as $$
+declare rec engram.patterns%rowtype;
+begin
+  select * into rec from engram.patterns where id = p_id;
+  if not found then return null; end if;
+  return jsonb_build_object(
+    'id', rec.id, 'namespace', rec.namespace,
+    'fingerprint', rec.fingerprint, 'decision', rec.decision,
+    'reason', rec.reason, 'confidence', rec.confidence,
+    'hit_count', rec.hit_count,
+    'success_count', rec.success_count, 'failure_count', rec.failure_count,
+    'meta', rec.meta,
+    'created_at', to_timestamp(rec.created_at / 1000)::text,
+    'updated_at', to_timestamp(rec.updated_at / 1000)::text,
+    'expires_at', case when rec.expires_at is not null
+      then to_timestamp(rec.expires_at / 1000)::text else null end
+  );
+end; $$;
+
+create or replace function engram.list_visits(
+  p_endpoint text default null, p_decision text default null,
+  p_limit int default 50
+) returns jsonb language plpgsql security definer set search_path = engram, pg_temp as $$
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', rv.id, 'user_id', rv.user_id, 'endpoint', rv.endpoint,
+      'decision', rv.decision, 'status_code', rv.status_code,
+      'ip', rv.ip, 'ua', rv.ua,
+      'entered_at', rv.entered_at::text,
+      'finished_at', rv.finished_at::text,
+      'duration_s', case when rv.finished_at is not null
+        then round(extract(epoch from (rv.finished_at - rv.entered_at))::numeric, 3)
+        else null end
+    ) order by rv.entered_at desc)
+    from engram.route_visits rv
+    where (p_endpoint is null or rv.endpoint = p_endpoint)
+      and (p_decision is null or rv.decision = p_decision)
+    limit p_limit
+  ), '[]'::jsonb);
+end; $$;
+
+create or replace function engram.list_audit(
+  p_ns text default null, p_limit int default 50
+) returns jsonb language plpgsql security definer set search_path = engram, pg_temp as $$
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', a.id, 'pattern_id', a.pattern_id,
+      'namespace', a.namespace, 'decision', a.decision,
+      'source', a.source, 'fingerprint', a.fingerprint,
+      'created_at', to_timestamp(a.created_at / 1000)::text
+    ) order by a.created_at desc)
+    from engram.audit a
+    where (p_ns is null or a.namespace = p_ns)
+    limit p_limit
+  ), '[]'::jsonb);
+end; $$;
+
+create or replace function engram.list_churn_queue(p_resolved boolean default false)
+returns jsonb language plpgsql security definer set search_path = engram, pg_temp as $$
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'user_id', cq.user_id,
+      'first_flagged_at', cq.first_flagged_at::text,
+      'last_flagged_at', cq.last_flagged_at::text,
+      'flag_count', cq.flag_count,
+      'current_signals', cq.current_signals,
+      'resolved_at', cq.resolved_at::text,
+      'resolved_by', cq.resolved_by
+    ) order by cq.last_flagged_at desc)
+    from engram.churn_queue cq
+    where (p_resolved = true or cq.resolved_at is null)
+  ), '[]'::jsonb);
+end; $$;
+
+create or replace function engram.dashboard()
+returns jsonb language plpgsql security definer set search_path = engram, pg_temp as $$
+declare pat_summary jsonb; visit_summary jsonb; churn_n int;
+begin
+  select jsonb_build_object(
+    'total', count(*), 'total_hits', coalesce(sum(hit_count), 0),
+    'by_decision', coalesce((
+      select jsonb_object_agg(decision, n)
+      from (select decision, count(*) as n from engram.patterns group by decision) s
+    ), '{}'),
+    'avg_confidence', round(coalesce(avg(confidence), 0)::numeric, 3)
+  ) into pat_summary from engram.patterns;
+  select jsonb_build_object(
+    'total', count(*),
+    'by_decision', coalesce((
+      select jsonb_object_agg(decision, n)
+      from (select decision, count(*) as n from engram.route_visits group by decision) s
+    ), '{}'),
+    'by_endpoint', coalesce((
+      select jsonb_object_agg(endpoint, n)
+      from (select endpoint, count(*) as n from engram.route_visits group by endpoint) s
+    ), '{}')
+  ) into visit_summary from engram.route_visits;
+  select count(*) into churn_n from engram.churn_queue where resolved_at is null;
+  return jsonb_build_object(
+    'patterns', pat_summary, 'route_visits', visit_summary,
+    'churn_queue_unresolved', churn_n, 'version', 'v1.0.2');
+end; $$;
+
 -- Grant EXECUTE on all functions.
 grant execute on function engram.hash_fingerprint(jsonb,text) to authenticated,service_role;
 grant execute on function engram.lookup(jsonb,text,float) to authenticated,service_role;
@@ -424,6 +555,12 @@ grant execute on function engram.finish_behavior(bigint,int) to authenticated,se
 grant execute on function engram.enqueue_churn(uuid,jsonb) to authenticated,service_role;
 grant execute on function engram.stats(text) to authenticated,service_role;
 grant execute on function engram.prune_rollups(bigint) to authenticated,service_role;
+grant execute on function engram.list_patterns(text,int) to authenticated,service_role;
+grant execute on function engram.get_pattern(text) to authenticated,service_role;
+grant execute on function engram.list_visits(text,text,int) to authenticated,service_role;
+grant execute on function engram.list_audit(text,int) to authenticated,service_role;
+grant execute on function engram.list_churn_queue(boolean) to authenticated,service_role;
+grant execute on function engram.dashboard() to authenticated,service_role;
 
 -- ============================================================
 -- pg_cron: sweep route_visits older than 7 days, hourly.
