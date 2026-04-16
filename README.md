@@ -123,6 +123,10 @@ Covers: all 18 functions, schema reference, classification rules, Node.js integr
 - **[Plexa](https://github.com/srk0102/plexa)** - multi-body orchestration
 - **[Supabase](https://supabase.com)** - the database Engram runs on
 
+## Contributing
+
+**[Read the contributing guide](CONTRIBUTING.md)**
+
 ## License
 
-MIT
+[MIT](LICENSE)
