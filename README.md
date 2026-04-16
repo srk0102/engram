@@ -51,13 +51,30 @@ Engram classifies the behavior shape. Stores the decision. Next request with the
 
 Bots never reach your database. Fraudsters never hit your backend. Real users never notice Engram exists.
 
-## Install (3 steps)
+## Install
 
-**Step 1.** Paste [`supabase/install.sql`](supabase/install.sql) into your Supabase SQL Editor. Run it.
+### Option A: As a Postgres extension (recommended)
 
-**Step 2.** Go to Settings → API → Exposed schemas → add `engram`.
+```sql
+-- Enable pg_tle (one time per project)
+create extension if not exists pg_tle;
 
-**Step 3.** Verify:
+-- Register Engram (paste supabase/tle-register.sql in SQL Editor)
+-- Then:
+create extension engram;
+```
+
+### Option B: Plain SQL
+
+```sql
+-- Paste supabase/install.sql into your SQL Editor. Run it.
+```
+
+### After either option:
+
+**1.** Go to Settings → API → Exposed schemas → add `engram`.
+
+**2.** Verify:
 
 ```sql
 select engram.classify('{"account_age_days":0,"uploads_last_hour":15,"ua_class":"missing"}'::jsonb);
