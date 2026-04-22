@@ -12,7 +12,6 @@
   <a href="https://www.npmjs.com/package/@srk0102/engram"><img src="https://img.shields.io/npm/v/@srk0102/engram?color=059669&label=npm" alt="npm"/></a>
   <a href="https://github.com/srk0102/engram"><img src="https://img.shields.io/badge/tests-34%20passing-059669" alt="tests"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-059669" alt="license"/></a>
-  <a href="https://github.com/srk0102/SCP"><img src="https://img.shields.io/badge/built_on-scp--protocol-4F46E5" alt="scp"/></a>
 </p>
 
 ---
@@ -109,7 +108,6 @@ Request 10000:            still cached. Brain never called again for this shape.
 ## Links
 
 - **npm:** https://www.npmjs.com/package/@srk0102/engram
-- **[SCP Protocol](https://github.com/srk0102/SCP)** — body-level pattern caching
 - **[Plexa](https://github.com/srk0102/plexa)** — multi-body orchestration
 
 ## Contributing
