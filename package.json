@@ -1,20 +1,15 @@
 {
-  "name": "@engram/core",
-  "version": "0.1.0",
-  "description":
-    "Your API learns to defend itself.",
-  "keywords": [
-    "behavioral-caching",
-    "bot-detection",
-    "pattern-memory",
-    "self-learning",
-    "supabase",
-    "api-protection",
-    "engram"
-  ],
+  "name": "engram-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Engram monorepo root. Ships two products: the SQL extension under /supabase and the npm package @srk0102/engram under /core.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/srk0102/engram"
-  }
+  },
+  "workspaces": [
+    "core",
+    "core/examples/*"
+  ]
 }

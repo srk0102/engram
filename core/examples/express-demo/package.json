@@ -1,0 +1,14 @@
+{
+  "name": "engram-express-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@srk0102/engram": "^0.2.0",
+    "express": "^5.0.0",
+    "pg": "^8.11.5"
+  }
+}

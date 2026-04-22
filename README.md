@@ -5,144 +5,116 @@
 <h1 align="center">Engram</h1>
 
 <p align="center">
-  Your API learns to defend itself.
+  Pattern-cached LLM decisions on Postgres.
 </p>
 
 <p align="center">
-  <a href="https://github.com/srk0102/engram"><img src="https://img.shields.io/badge/version-v1.0.2-059669" alt="version"/></a>
-  <a href="https://github.com/srk0102/engram"><img src="https://img.shields.io/badge/tests-17%20passing-059669" alt="tests"/></a>
+  <a href="https://www.npmjs.com/package/@srk0102/engram"><img src="https://img.shields.io/npm/v/@srk0102/engram?color=059669&label=npm" alt="npm"/></a>
+  <a href="https://github.com/srk0102/engram"><img src="https://img.shields.io/badge/tests-34%20passing-059669" alt="tests"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-059669" alt="license"/></a>
   <a href="https://github.com/srk0102/SCP"><img src="https://img.shields.io/badge/built_on-scp--protocol-4F46E5" alt="scp"/></a>
-  <a href="https://supabase.com"><img src="https://img.shields.io/badge/runs_on-supabase-3ECF8E" alt="supabase"/></a>
 </p>
 
 ---
 
-## The problem
+## What it is
 
-You built an API. Users pay for it. Bots don't.
+You have an LLM judging per-request decisions (fraud, abuse, anomaly, routing, you name it). You don't want to pay for the LLM every single request forever. Engram is a Postgres-backed cache that sits in front of the call — first time it sees a shape of input, the LLM runs; every repeat reuses the decision in milliseconds.
 
-A bot scraping your data costs you the same compute as a real user. A fraudster with a stolen card burns through your paid features in minutes. A churning user silently walks away with unused credits.
+- **Bring your own brain** — any LLM (Ollama, Anthropic, OpenAI) or a plain function
+- **Bring your own schema** — Zod, Valibot, hand-rolled, anything with `.parse()`
+- **Bring your own `cacheKey`** — coarsen signals however fits your domain
+- Engram handles storage, retrieval, cache lookup, confidence decay, and cross-framework sharing
 
-Rate limiters don't help. They count requests, not behavior. A smart bot sends 29 requests per minute and passes your 30/min limit. A real user doing 5 actions in quick succession gets blocked.
+This repo ships **two products** from the same idea:
 
-## The solution
+| Product | Path | Purpose |
+|---|---|---|
+| **npm package `@srk0102/engram`** | [`core/`](core) | Any Node.js backend (Express / Fastify / anything) on any Postgres. v0.2.0, published. |
+| **Supabase SQL extension** | [`supabase/`](supabase) | Paste-into-SQL-Editor for Supabase users. v1.0.2. |
 
-Engram watches **behavior**, not requests.
+---
 
-A real user has an account age, a payment history, a browsing pattern. A bot has a 0-day account doing 15 uploads per hour with no user agent.
+## Install the npm package
 
-Engram classifies the behavior shape. Stores the decision. Next request with the same shape - decision served from cache. No classification needed.
+```bash
+npm install @srk0102/engram pg
+```
 
-**One brain call teaches. The pattern store remembers.**
+```ts
+import { Engram, OllamaAdapter, bucket, bucketEnum } from "@srk0102/engram";
+import { z } from "zod";
 
-| What | How long | Cost |
-|------|----------|------|
-| First request from a new behavior shape | ~100ms | ~$0 |
-| Every request after that with same shape | <1ms | $0 |
+const engram = new Engram({
+  connectionString: process.env.DATABASE_URL,
+  namespace: "my_app",
+});
+await engram.connect(); // runs migrations idempotently
 
-## What happens to different users
+const classify = engram.policy({
+  brain: new OllamaAdapter({ model: "llama3.2" }),
+  prompt: (_ctx, i) =>
+    `Classify ${JSON.stringify(i)} as JSON {"action":"allow"|"block"}`,
+  schema: z.object({ action: z.enum(["allow", "block"]) }),
+  cacheKey: (i) =>
+    `charge:${bucket(i.amount, [50, 500, 5000], ["tiny","small","medium","large"])}`,
+});
 
-| User | Engram sees | Decision | Reaches your API? |
-|------|-------------|----------|-------------------|
-| Real user, 30 days old, 2 actions today | Normal behavior | **allow** | Yes |
-| Bot, 0 days old, 15 requests this hour | Burst velocity + no UA | **fraud** (403) | No |
-| Scraper, fake Chrome UA, 8 requests/hr | Young account + high velocity | **fraud** (403) | No |
-| Paid user, inactive 20 days, has credits | Idle with unspent credits | **churn_risk** | Yes (+ team notified) |
+const r1 = await classify({ amount: 9.99 });   // source: "brain"  (~1s)
+const r2 = await classify({ amount: 8.50 });   // source: "cache" (~4ms)  same bucket
+```
 
-Bots never reach your database. Fraudsters never hit your backend. Real users never notice Engram exists.
+Express and Fastify middleware ship as subpath exports:
 
-## Install
+```ts
+import { engramExpress } from "@srk0102/engram/express";
+import { engramFastify } from "@srk0102/engram/fastify";
+```
 
-### Option A: As a Postgres extension (recommended)
+**[Full docs for the npm package →](core/README.md)**
+**[Honest developer-experience notes →](core/DEVELOPER_EXPERIENCE.md)**
+
+---
+
+## Install the Supabase SQL extension
 
 ```sql
 -- Enable pg_tle (one time per project)
 create extension if not exists pg_tle;
 
--- Register Engram (paste supabase/tle-register.sql in SQL Editor)
--- Then:
+-- Register Engram (paste supabase/tle-register.sql in SQL Editor), then:
 create extension engram;
 ```
 
-### Option B: Plain SQL
+Or paste [`supabase/install.sql`](supabase/install.sql) directly into your SQL Editor and run it.
 
-```sql
--- Paste supabase/install.sql into your SQL Editor. Run it.
-```
+**[Full docs for the Supabase extension →](docs.md)**
 
-### After either option:
-
-**1.** Go to Settings → API → Exposed schemas → add `engram`.
-
-**2.** Verify:
-
-```sql
-select engram.classify('{"account_age_days":0,"uploads_last_hour":15,"ua_class":"missing"}'::jsonb);
--- → {"decision":"fraud","confidence":0.95}
-```
-
-Done. No new infrastructure. No code changes. Uses your existing Postgres.
-
-## Use it
-
-```sql
--- Classify a request
-select engram.classify('{"account_age_days":45,"ua_class":"browser"}'::jsonb);
-
--- Full flow: check cache → classify → learn → return
-select engram.decide('{"account_age_days":45,"ua_class":"browser"}'::jsonb, 'my_app');
-
--- See everything Engram has learned
-select engram.dashboard();
-
--- List all patterns, all visits, all flagged users
-select engram.list_patterns();
-select engram.list_visits(null, 'fraud', 20);
-select engram.list_churn_queue();
-```
-
-## Use it in Node.js
-
-```typescript
-import { withEngram } from './lib/engram'
-
-export const POST = withEngram(async (request) => {
-  // Bots and fraudsters never reach this line.
-  // Engram already returned 403/429 for them.
-  const data = await handleRequest(request)
-  return Response.json(data)
-})
-```
-
-Fail-open by design. If Supabase is down, your handler runs anyway. Engram never blocks a real user because it crashed.
+---
 
 ## How it learns
 
 ```
-Request 1 (new shape):  classify → learn → return "fraud"
-Request 2 (same shape): cache hit → return "fraud" instantly
-Request 3 (same shape): cache hit → return "fraud" instantly
+Request 1 (new shape):    brain runs  → learned decision stored under cacheKey
+Request 2 (same shape):   cache hit   → ~4ms, no LLM call
+Request 3 (same shape):   cache hit   → ~4ms
 ...
-Request 1000:           still cached. Brain never called again.
+Request 10000:            still cached. Brain never called again for this shape.
 ```
 
-Patterns get stronger with correct decisions. Wrong decisions weaken them. Below 20% confidence, patterns auto-evict and the brain re-classifies fresh.
+`feedback(cacheId, wasCorrect)` raises or lowers the cached decision's confidence. Below 0.2, patterns auto-evict and the next request re-asks the brain.
 
-## Documentation
-
-**[Read the full docs →](docs.md)**
-
-Covers: all 18 functions, schema reference, classification rules, Node.js integration, security model, retention policies, custom rule examples.
+---
 
 ## Links
 
-- **[SCP Protocol](https://github.com/srk0102/SCP)** - body-level pattern caching
-- **[Plexa](https://github.com/srk0102/plexa)** - multi-body orchestration
-- **[Supabase](https://supabase.com)** - the database Engram runs on
+- **npm:** https://www.npmjs.com/package/@srk0102/engram
+- **[SCP Protocol](https://github.com/srk0102/SCP)** — body-level pattern caching
+- **[Plexa](https://github.com/srk0102/plexa)** — multi-body orchestration
 
 ## Contributing
 
-**[Read the contributing guide](CONTRIBUTING.md)**
+**[Read the contributing guide →](CONTRIBUTING.md)**
 
 ## License
 
